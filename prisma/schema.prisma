@@ -1,0 +1,71 @@
+// ============================================================================
+// LedgerPro ATS — Prisma Schema (PostgreSQL / Supabase)
+// ============================================================================
+// Design Decisions:
+// 1. Fixed Pipeline Enum (`ApplicationStatus`): Enforces a deterministic hiring
+//    workflow (NEW -> SCREENING -> INTERVIEW -> OFFER / REJECTED) at the database
+//    level so invalid states can never be persisted.
+// 2. Relational Integrity (`onDelete: Cascade`): Deleting a Job automatically
+//    cleans up its associated Applications.
+// 3. Strategic Indexes: Composite and single-column indexes on `jobId`, `status`,
+//    and `candidateEmail` optimize the recruiter's primary workflows (filtering
+//    by job/status and searching by candidate).
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum JobStatus {
+  OPEN
+  CLOSED
+}
+
+enum ApplicationStatus {
+  NEW
+  SCREENING
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+model Job {
+  id           String        @id @default(cuid())
+  title        String
+  department   String
+  location     String
+  type         String        @default("Full-time") // e.g., Full-time, Remote, Contract
+  salaryRange  String?
+  description  String        @db.Text
+  status       JobStatus     @default(OPEN)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  applications Application[]
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Application {
+  id             String            @id @default(cuid())
+  jobId          String
+  job            Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidateName  String
+  candidateEmail String
+  resumeUrl      String            @db.Text
+  resumeName     String?
+  coverNote      String?           @db.Text
+  status         ApplicationStatus @default(NEW)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  @@index([jobId])
+  @@index([status])
+  @@index([candidateEmail])
+  @@index([createdAt])
+}
